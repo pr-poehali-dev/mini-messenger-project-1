@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -46,7 +47,17 @@ const mockMessages: Message[] = [
   { id: 3, text: 'Давай встретимся завтра', time: '15:30', isMine: false },
 ];
 
+interface TelegramUser {
+  id: number;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+  photo_url?: string;
+}
+
 function Index() {
+  const navigate = useNavigate();
+  const [currentUser, setCurrentUser] = useState<TelegramUser | null>(null);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(mockChats[0]);
   const [messages, setMessages] = useState<Message[]>(mockMessages);
   const [newMessage, setNewMessage] = useState('');
@@ -57,6 +68,13 @@ function Index() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [contactsPermission, setContactsPermission] = useState<'granted' | 'denied' | 'prompt'>('prompt');
   const [chats, setChats] = useState<Chat[]>(mockChats);
+
+  useEffect(() => {
+    const userStr = localStorage.getItem('telegramUser');
+    if (userStr) {
+      setCurrentUser(JSON.parse(userStr));
+    }
+  }, []);
 
   const filteredChats = chats.filter(chat =>
     chat.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -318,13 +336,21 @@ function Index() {
           <div className="space-y-6">
             <div className="flex flex-col items-center gap-4">
               <Avatar className="w-24 h-24">
+                {currentUser?.photo_url ? (
+                  <AvatarImage src={currentUser.photo_url} />
+                ) : null}
                 <AvatarFallback className="bg-primary text-primary-foreground text-3xl">
-                  Я
+                  {currentUser?.first_name?.[0] || 'Я'}
                 </AvatarFallback>
               </Avatar>
               <div className="text-center">
-                <h3 className="font-semibold text-lg">Мой профиль</h3>
-                <p className="text-sm text-muted-foreground">в сети</p>
+                <h3 className="font-semibold text-lg">
+                  {currentUser?.first_name} {currentUser?.last_name || ''}
+                </h3>
+                {currentUser?.username && (
+                  <p className="text-sm text-muted-foreground">@{currentUser.username}</p>
+                )}
+                <p className="text-xs text-green-500 mt-1">в сети</p>
               </div>
             </div>
             
@@ -344,6 +370,16 @@ function Index() {
               <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-background cursor-pointer transition-colors">
                 <Icon name="Lock" size={20} className="text-muted-foreground" />
                 <span className="text-sm">Приватность</span>
+              </div>
+              <div 
+                onClick={() => {
+                  localStorage.removeItem('telegramUser');
+                  navigate('/login');
+                }}
+                className="flex items-center gap-3 p-3 rounded-lg hover:bg-destructive/10 cursor-pointer transition-colors text-destructive"
+              >
+                <Icon name="LogOut" size={20} />
+                <span className="text-sm">Выйти</span>
               </div>
             </div>
           </div>
