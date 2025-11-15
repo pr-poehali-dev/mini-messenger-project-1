@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -6,6 +6,14 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import Icon from '@/components/ui/icon';
+
+interface Contact {
+  id: number;
+  name: string;
+  phone: string;
+  avatar: string;
+  isRegistered: boolean;
+}
 
 interface Chat {
   id: number;
@@ -45,10 +53,70 @@ function Index() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showProfile, setShowProfile] = useState(false);
   const [showVideoCall, setShowVideoCall] = useState(false);
+  const [showNewChat, setShowNewChat] = useState(false);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contactsPermission, setContactsPermission] = useState<'granted' | 'denied' | 'prompt'>('prompt');
+  const [chats, setChats] = useState<Chat[]>(mockChats);
 
-  const filteredChats = mockChats.filter(chat =>
+  const filteredChats = chats.filter(chat =>
     chat.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const requestContactsAccess = async () => {
+    if ('contacts' in navigator && 'ContactsManager' in window) {
+      try {
+        const props = ['name', 'tel'];
+        const opts = { multiple: true };
+        const contactsList = await (navigator as any).contacts.select(props, opts);
+        
+        const formattedContacts: Contact[] = contactsList.map((contact: any, index: number) => ({
+          id: Date.now() + index,
+          name: contact.name?.[0] || 'Без имени',
+          phone: contact.tel?.[0] || '',
+          avatar: '',
+          isRegistered: Math.random() > 0.3
+        }));
+        
+        setContacts(formattedContacts);
+        setContactsPermission('granted');
+      } catch (error) {
+        setContactsPermission('denied');
+      }
+    } else {
+      const mockContacts: Contact[] = [
+        { id: 101, name: 'Иван Петров', phone: '+7 999 123 45 67', avatar: '', isRegistered: true },
+        { id: 102, name: 'Елена Сидорова', phone: '+7 999 234 56 78', avatar: '', isRegistered: true },
+        { id: 103, name: 'Михаил Кузнецов', phone: '+7 999 345 67 89', avatar: '', isRegistered: false },
+        { id: 104, name: 'Ольга Смирнова', phone: '+7 999 456 78 90', avatar: '', isRegistered: true },
+        { id: 105, name: 'Владимир Попов', phone: '+7 999 567 89 01', avatar: '', isRegistered: true },
+      ];
+      setContacts(mockContacts);
+      setContactsPermission('granted');
+    }
+  };
+
+  const startNewChat = (contact: Contact) => {
+    const existingChat = chats.find(chat => chat.name === contact.name);
+    
+    if (existingChat) {
+      setSelectedChat(existingChat);
+    } else {
+      const newChat: Chat = {
+        id: Date.now(),
+        name: contact.name,
+        avatar: contact.avatar,
+        lastMessage: 'Начните переписку',
+        time: 'Сейчас',
+        unread: 0,
+        online: contact.isRegistered
+      };
+      setChats([newChat, ...chats]);
+      setSelectedChat(newChat);
+      setMessages([]);
+    }
+    
+    setShowNewChat(false);
+  };
 
   const handleSendMessage = () => {
     if (!newMessage.trim()) return;
@@ -70,14 +138,24 @@ function Index() {
         <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-semibold">Чаты</h1>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowProfile(true)}
-              className="hover:bg-card"
-            >
-              <Icon name="User" size={20} />
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowNewChat(true)}
+                className="hover:bg-card"
+              >
+                <Icon name="UserPlus" size={20} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowProfile(true)}
+                className="hover:bg-card"
+              >
+                <Icon name="User" size={20} />
+              </Button>
+            </div>
           </div>
           
           <div className="relative">
@@ -268,6 +346,77 @@ function Index() {
                 <span className="text-sm">Приватность</span>
               </div>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showNewChat} onOpenChange={setShowNewChat}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle>Новый чат</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {contactsPermission === 'prompt' && (
+              <div className="text-center py-8">
+                <Icon name="Contacts" size={48} className="mx-auto mb-4 text-muted-foreground" />
+                <h3 className="font-semibold mb-2">Доступ к контактам</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Разрешите доступ к контактам, чтобы найти друзей
+                </p>
+                <Button onClick={requestContactsAccess} className="bg-primary hover:bg-primary/90">
+                  <Icon name="UserCheck" size={18} className="mr-2" />
+                  Разрешить доступ
+                </Button>
+              </div>
+            )}
+            
+            {contactsPermission === 'granted' && (
+              <>
+                <div className="relative">
+                  <Icon name="Search" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Поиск контактов..."
+                    className="pl-10 bg-background border-border"
+                  />
+                </div>
+                
+                <ScrollArea className="h-96">
+                  <div className="space-y-1">
+                    {contacts.map((contact) => (
+                      <button
+                        key={contact.id}
+                        onClick={() => contact.isRegistered && startNewChat(contact)}
+                        disabled={!contact.isRegistered}
+                        className={`w-full p-3 rounded-lg text-left transition-all ${
+                          contact.isRegistered 
+                            ? 'hover:bg-background cursor-pointer' 
+                            : 'opacity-50 cursor-not-allowed'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar>
+                            <AvatarFallback className="bg-primary text-primary-foreground">
+                              {contact.name[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm">{contact.name}</p>
+                            <p className="text-xs text-muted-foreground">{contact.phone}</p>
+                          </div>
+                          {contact.isRegistered ? (
+                            <Badge className="bg-green-500 text-white">В приложении</Badge>
+                          ) : (
+                            <Button size="sm" variant="outline" className="text-xs">
+                              Пригласить
+                            </Button>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
